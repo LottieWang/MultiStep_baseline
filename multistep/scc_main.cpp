@@ -451,6 +451,19 @@ int main(int argc, char** argv)
   setbuf(stdout, NULL);
   if (argc < 2)
     print_usage(argv);
+  int rounds = 10;
+  bool stats = false;
+  char* out_file = NULL;
+  for (int i = 2; i< argc; i++){
+    string s(argv[i]);
+    if (s=="-t"){
+      rounds = atoi(argv[++i]);
+    }else if (s=="-stats"){
+      stats=true;
+    }else if (s=="-o"){
+      out_file = argv[++i];
+    }
+  }
 
   //int* srcs;
   //int* dsts;
@@ -499,30 +512,36 @@ int main(int argc, char** argv)
   double exec_time = timer();
 #endif
 
+  double temp_time = timer();
   run_scc(g, scc_maps,
     max_deg_vert, avg_degree, vert_cutoff);
-
-  for(int i = 0; i < 10; i++) {
+  temp_time = timer() - temp_time;
+  printf("round 0: %f\n", temp_time);
+  double total_time = 0;
+  for(int i = 0; i < rounds; i++) {
     double exec_time = timer();
     run_scc(g, scc_maps, max_deg_vert, avg_degree, vert_cutoff);
     exec_time = timer() - exec_time;
-    printf("%f\n", exec_time);
+    printf("round %d: %f\n", i+1, exec_time);
+    total_time += exec_time;
   }
+  printf("average time: %f\n", total_time/rounds);
 
 #if TIMING
   exec_time = timer() - exec_time;
   //printf("Multistep SCC time: %9.6lf\n", exec_time);
 #endif
-
+if (stats){
   scc_verify(g, scc_maps);
+}
 
 #if VERBOSE
   elt = timer() - elt;
   printf("Done, %9.6lf\n", elt);
 #endif
 
-  if (argc == 3)
-    output_scc(g, scc_maps, argv[2]);
+  if (out_file!= NULL)
+    output_scc(g, scc_maps, out_file);
 
   delete [] out_array;
   delete [] out_degree_list;
