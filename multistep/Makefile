@@ -9,7 +9,7 @@ cc:
 	$(CXX) $(CXXFLAGS) -o cc cc_main.cpp
 
 scc: scc_main.cpp
-	$(CXX) $(CXXFLAGS) -o scc scc_main.cpp
+	$(CXX) $(CXXFLAGS) $(INCLUDE_PATH) -o scc scc_main.cpp
 
 clean:
 	rm cc scc
