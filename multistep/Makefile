@@ -1,5 +1,6 @@
-CXX = icpc
-CXXFLAGS = -Wall -fopenmp -O3
+CXX = g++
+# CXXFLAGS = -Wall -fopenmp -O3 -fcilkplus -DCILK -march=native
+CXXFLAGS = -Wall -fopenmp -O3 -fcilkplus -DCILK -march=native
 
 all: cc scc
 

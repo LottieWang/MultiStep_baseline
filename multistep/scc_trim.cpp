@@ -51,9 +51,9 @@ int scc_trim_none(graph& g, bool* valid,
 #pragma omp parallel
 {
 #pragma omp for nowait
-  for (int i = 0; i < g.n; ++i) valid[i] = true;
+  for (size_t i = 0; i < g.n; ++i) valid[i] = true;
 #pragma omp for nowait
-  for (int i = 0; i < g.n; ++i) scc_maps[i] = -1;
+  for (size_t i = 0; i < g.n; ++i) scc_maps[i] = -1;
 }
 
   num_valid = g.n;
@@ -68,7 +68,7 @@ int scc_trim_simple(graph& g, bool* valid,
   int trim_count = 0;
 
 #pragma omp parallel for reduction(+:trim_count)
-  for (int v = 0; v < g.n; ++v)
+  for (size_t v = 0; v < g.n; ++v)
   {
     if (out_degree(g, v) < 1 || in_degree(g, v) < 1)
     {
@@ -99,7 +99,7 @@ int scc_trim(graph& g, bool* valid,
   int thread_start;
 
 #pragma omp for schedule(guided) nowait
-  for (int v = 0; v < g.n; ++v)
+  for (size_t v = 0; v < g.n; ++v)
   {
     if (out_degree(g, v) < 1 || in_degree(g, v) < 1)
     {

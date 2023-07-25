@@ -53,6 +53,9 @@ using namespace std;
 #include <assert.h>
 #include <vector>
 #include <omp.h>
+#include <fstream>
+#include <parlay>
+// #include "pbbslib/sample_sort.h"
 
 #define VERBOSE 0
 #define DEBUG 0
@@ -73,8 +76,7 @@ double timer()
 }
 
 typedef struct graph {
-  int n;
-  unsigned m;
+  size_t n, m;
   int* out_array;
   int* in_array;
   unsigned* out_degree_list;
@@ -123,6 +125,128 @@ void read_edge(char* filename,
 
   infile.close();
 }
+
+void read_binary(char const *filename, size_t &n, size_t &m, int* &out_array, int* &in_array, unsigned* &out_degree_list, unsigned* &in_degree_list, int &max_deg_vert, double &avg_degree) {
+  std::ifstream ifs(filename);
+  if(!ifs.is_open()) {
+    std::cerr << "Error: file " << filename << " does not exist\n";
+    exit(EXIT_FAILURE);
+  }
+  size_t _n, _m, sizes;
+  ifs.read(reinterpret_cast<char*>(&_n), sizeof(size_t));
+  ifs.read(reinterpret_cast<char*>(&_m), sizeof(size_t));
+  ifs.read(reinterpret_cast<char*>(&sizes), sizeof(size_t));
+  n = _n, m = _m;
+  assert(sizes == (n + 1) * 8 + m * 4 + 3 * 8);
+
+  pbbs::sequence<uint64_t> offset(n + 1);
+  pbbs::sequence<uint32_t> es(m);
+  ifs.read(reinterpret_cast<char*>(offset.begin()), (n + 1) * 8);
+  ifs.read(reinterpret_cast<char*>(es.begin()), m * 4);
+  if(ifs.peek() != EOF) {
+    fprintf(stderr, "Error: Bad data\n");
+    exit(EXIT_FAILURE);
+  }
+  ifs.close();
+
+  // out
+  out_degree_list = new unsigned[n+1];
+  out_array = new int[m];
+  parallel_for(0, n+1, [&](size_t i) {
+    out_degree_list[i] = offset[i];
+  });
+  parallel_for(0, m, [&](size_t i) {
+    out_array[i] = es[i];
+  });
+
+  // in
+  in_degree_list = new unsigned[n+1];
+  in_array = new int[m];
+
+  //for(int i = 0; i <= n; i++) {
+    //in_degree_list[i] = 0;
+  //}
+  //for(int i = 0; i < n; i++) {
+    //for(size_t j = offset[i]; j < offset[i+1]; j++) {
+      //in_degree_list[es[j]]++;
+    //}
+  //}
+  //uint32_t sum = 0;
+  //for(int i = 0; i < n; i++) {
+    //uint32_t tmp = in_degree_list[i];
+    //in_degree_list[i] = sum;
+    //sum += tmp;
+  //}
+  //in_degree_list[n] = sum;
+  //assert(sum == m);
+  //unsigned* tmp = new unsigned[n];
+  //copy(in_degree_list, in_degree_list+n, tmp);
+  //for(int i = 0; i < n; i++) {
+    //for(size_t j = offset[i]; j < offset[i+1]; j++) {
+      //in_array[tmp[es[j]]++] = i;
+    //}
+  //}
+
+  pbbs::sequence<std::pair<unsigned, unsigned>> edge_list(m);
+  parallel_for(0, n, [&](size_t i) {
+    parallel_for(offset[i], offset[i+1], [&](size_t j) {
+      edge_list[j] = {es[j], i};
+    });
+  });
+  sample_sort_inplace(edge_list.slice(), [&](std::pair<unsigned, unsigned> a, std::pair<unsigned, unsigned> b) {
+    return a < b;
+  });
+  parallel_for(0, edge_list[0].first, [&](size_t i) {
+    in_degree_list[i] = 0;
+  });
+  parallel_for(0, m, [&](size_t i) {
+    unsigned u = edge_list[i].first;
+    unsigned v = edge_list[i].second;
+    in_array[i] = v;
+    if(i == 0 || edge_list[i-1].first != u) {
+      in_degree_list[u] = i;
+    }
+    if(i == m-1 || edge_list[i+1].first != u) {
+      int end = (i==m-1?n+1:edge_list[i+1].first);
+      parallel_for(u+1, end, [&](size_t j) {
+        in_degree_list[j] = i+1;
+      });
+    }
+  });
+  
+  max_deg_vert = 0;
+  avg_degree = 0;
+  double max_deg = 0;
+  for(size_t i = 0; i < n; i++) {
+    int in_deg = in_degree_list[i+1]-in_degree_list[i];
+    int out_deg = out_degree_list[i+1]-out_degree_list[i];
+    double prod = (double)in_deg*out_deg;
+    if(prod > max_deg) {
+      max_deg = prod;
+      max_deg_vert = i;
+    }
+    avg_degree += out_deg;
+  }
+  avg_degree /= n;
+
+
+  // validate
+  //parallel_for(0, n+1, [&](size_t i) {
+    //assert(i == n || in_degree_list[i] <= in_degree_list[i+1]);
+    //assert(in_degree_list[i] <= m);
+    //assert(i == n || out_degree_list[i] <= out_degree_list[i+1]);
+    //assert(out_degree_list[i] <= m);
+  //});
+  //parallel_for(0, m, [&](size_t i) {
+    //assert(in_array[i] < n);
+    //assert(out_array[i] < n);
+  //});
+  //parallel_for(0, n, [&](size_t i) {
+    //parallel_for(offset[i], offset[i+1], [&](size_t j) {
+      //assert(j == offset[i+1]-1 || es[j] <= es[j+1]);
+    //});
+  //});
+};
 
 void create_csr(int n, unsigned m, 
   int* srcs, int* dsts,
@@ -195,7 +319,7 @@ void output_scc(graph& g, int* scc_maps, char* output_file)
   std::ofstream outfile;
   outfile.open(output_file);
 
-  for (int i = 0; i < g.n; ++i)
+  for (size_t i = 0; i < g.n; ++i)
     outfile << scc_maps[i] << std::endl;
 
   outfile.close();
@@ -230,11 +354,11 @@ void run_scc(graph& g, int*& scc_maps,
 #pragma omp parallel
 {
 #pragma omp for nowait
-  for (int i = 0; i < g.n; ++i) valid[i] = true;
+  for (size_t i = 0; i < g.n; ++i) valid[i] = true;
 #pragma omp for nowait
-  for (int i = 0; i < g.n; ++i) scc_maps[i] = -1;
+  for (size_t i = 0; i < g.n; ++i) scc_maps[i] = -1;
 #pragma omp for nowait
-  for (int i = 0; i < g.n; ++i) valid_verts[i] = i;
+  for (size_t i = 0; i < g.n; ++i) valid_verts[i] = i;
 }
 
 
@@ -256,7 +380,7 @@ else if (TRIM_LEVEL == 2)
     valid_verts, num_valid,
     scc_maps);
   num_valid = 0;
-  for (int i = 0; i < g.n; ++i) if (valid[i]) valid_verts[num_valid++] = i;
+  for (size_t i = 0; i < g.n; ++i) if (valid[i]) valid_verts[num_valid++] = i;
 }
 
 #if VERIFY
@@ -322,10 +446,9 @@ int main(int argc, char** argv)
   if (argc < 2)
     print_usage(argv);
 
-  int* srcs;
-  int* dsts;
-  int n;
-  unsigned m;
+  //int* srcs;
+  //int* dsts;
+  size_t n, m;
   int* out_array;
   int* in_array;
   unsigned* out_degree_list;
@@ -341,7 +464,7 @@ int main(int argc, char** argv)
   elt = timer();
 #endif
 
-  read_edge(argv[1], n, m, srcs, dsts);
+  //read_edge(argv[1], n, m, srcs, dsts);
 
 #if VERBOSE
   elt = timer() - elt;
@@ -350,13 +473,14 @@ int main(int argc, char** argv)
   elt = timer();
 #endif
 
-  create_csr(n, m, srcs, dsts, 
-    out_array, in_array,
-    out_degree_list, in_degree_list,
-    max_deg_vert, avg_degree);
+  read_binary(argv[1], n, m, out_array, in_array, out_degree_list, in_degree_list, max_deg_vert, avg_degree);
+  //create_csr(n, m, srcs, dsts, 
+    //out_array, in_array,
+    //out_degree_list, in_degree_list,
+    //max_deg_vert, avg_degree);
   graph g = {n, m, out_array, in_array, out_degree_list, in_degree_list};
-  delete [] srcs;
-  delete [] dsts;
+  //delete [] srcs;
+  //delete [] dsts;
 
 #if VERBOSE
   elt = timer() - elt;
@@ -372,9 +496,16 @@ int main(int argc, char** argv)
   run_scc(g, scc_maps,
     max_deg_vert, avg_degree, vert_cutoff);
 
+  for(int i = 0; i < 10; i++) {
+    double exec_time = timer();
+    run_scc(g, scc_maps, max_deg_vert, avg_degree, vert_cutoff);
+    exec_time = timer() - exec_time;
+    printf("%f\n", exec_time);
+  }
+
 #if TIMING
   exec_time = timer() - exec_time;
-  printf("Multistep SCC time: %9.6lf\n", exec_time);
+  //printf("Multistep SCC time: %9.6lf\n", exec_time);
 #endif
 
   scc_verify(g, scc_maps);

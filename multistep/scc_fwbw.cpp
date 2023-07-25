@@ -48,11 +48,11 @@ bool* scc_fwbw_fw(graph& g, bool* valid,
   int* valid_verts, int num_valid,
   int root, double avg_degree)
 {
-  int num_verts = g.n;
+  size_t num_verts = g.n;
   int* queue = new int[num_valid];
   int* queue_next = new int[num_valid];
   int queue_size = 0; 
-  int next_size = 0;
+  size_t next_size = 0;
   int num_fw = 0;
   bool use_hybrid = false;
   bool done_switch = false;
@@ -231,11 +231,11 @@ bool* scc_fwbw_bw(graph& g, bool* valid, bool* fw,
   int* valid_verts, int num_valid,
   int root, double avg_degree)
 {
-  int num_verts = g.n;
+  size_t num_verts = g.n;
   int* queue = new int[num_valid];
   int* queue_next = new int[num_valid];
   int queue_size = 0; 
-  int next_size = 0;
+  size_t next_size = 0;
   int num_scc = 0;
   bool use_hybrid = false;
   bool done_switch = false;
@@ -423,7 +423,7 @@ int update_valid(graph& g, bool* valid, bool* scc,
   int thread_start;
 
 #pragma omp for nowait
-  for (int i = 0; i < num_valid; ++i)
+  for (size_t i = 0; i < num_valid; ++i)
   {
     int vert = valid_verts[i];
     if (scc[vert])

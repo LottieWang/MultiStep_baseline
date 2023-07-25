@@ -70,8 +70,10 @@ void scc_verify(graph& g, int* scc_maps)
         max_scc = counts[i];
     }
 
-  printf("Num SCCs: %d, Nontrivial: %d, Max SCC: %d, Unassigned %d\n", 
-    num_sccs, num_nontrivial, max_scc, unassigned);
+  //printf("Num SCCs: %d, Nontrivial: %d, Max SCC: %d, Unassigned %d\n", 
+    //num_sccs, num_nontrivial, max_scc, unassigned);
+  printf("num_sccs %d\n", num_sccs);
+  printf("max_scc %d\n", max_scc);
 
   delete [] counts;
 }
