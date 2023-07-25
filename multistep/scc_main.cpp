@@ -54,7 +54,10 @@ using namespace std;
 #include <vector>
 #include <omp.h>
 #include <fstream>
-#include <parlay>
+#include <parlay/parallel.h>
+#include <parlay/primitives.h>
+#include <parlay/sequence.h>
+#include <parlay/random.h>
 // #include "pbbslib/sample_sort.h"
 
 #define VERBOSE 0
@@ -139,8 +142,8 @@ void read_binary(char const *filename, size_t &n, size_t &m, int* &out_array, in
   n = _n, m = _m;
   assert(sizes == (n + 1) * 8 + m * 4 + 3 * 8);
 
-  pbbs::sequence<uint64_t> offset(n + 1);
-  pbbs::sequence<uint32_t> es(m);
+  parlay::sequence<uint64_t> offset(n + 1);
+  parlay::sequence<uint32_t> es(m);
   ifs.read(reinterpret_cast<char*>(offset.begin()), (n + 1) * 8);
   ifs.read(reinterpret_cast<char*>(es.begin()), m * 4);
   if(ifs.peek() != EOF) {
@@ -152,10 +155,10 @@ void read_binary(char const *filename, size_t &n, size_t &m, int* &out_array, in
   // out
   out_degree_list = new unsigned[n+1];
   out_array = new int[m];
-  parallel_for(0, n+1, [&](size_t i) {
+  parlay::parallel_for(0, n+1, [&](size_t i) {
     out_degree_list[i] = offset[i];
   });
-  parallel_for(0, m, [&](size_t i) {
+  parlay::parallel_for(0, m, [&](size_t i) {
     out_array[i] = es[i];
   });
 
@@ -187,28 +190,31 @@ void read_binary(char const *filename, size_t &n, size_t &m, int* &out_array, in
     //}
   //}
 
-  pbbs::sequence<std::pair<unsigned, unsigned>> edge_list(m);
-  parallel_for(0, n, [&](size_t i) {
-    parallel_for(offset[i], offset[i+1], [&](size_t j) {
+  parlay::sequence<std::pair<unsigned, unsigned>> edge_list(m);
+  parlay::parallel_for(0, n, [&](size_t i) {
+    parlay::parallel_for(offset[i], offset[i+1], [&](size_t j) {
       edge_list[j] = {es[j], i};
     });
   });
-  sample_sort_inplace(edge_list.slice(), [&](std::pair<unsigned, unsigned> a, std::pair<unsigned, unsigned> b) {
-    return a < b;
-  });
-  parallel_for(0, edge_list[0].first, [&](size_t i) {
+  // sample_sort_inplace(edge_list.slice(), [&](std::pair<unsigned, unsigned> a, std::pair<unsigned, unsigned> b) {
+  //   return a < b;
+  // });
+  parlay::integer_sort_inplace(edge_list,
+																	[&](const std::pair<unsigned, unsigned>& p) { return p.first; });
+  parlay::parallel_for(0, edge_list[0].first, [&](size_t i) {
     in_degree_list[i] = 0;
   });
-  parallel_for(0, m, [&](size_t i) {
+  in_array[0]=edge_list[0].second;
+  parlay::parallel_for(1, m, [&](size_t i) {
     unsigned u = edge_list[i].first;
     unsigned v = edge_list[i].second;
     in_array[i] = v;
-    if(i == 0 || edge_list[i-1].first != u) {
+    if(edge_list[i-1].first != u) {
       in_degree_list[u] = i;
     }
     if(i == m-1 || edge_list[i+1].first != u) {
       int end = (i==m-1?n+1:edge_list[i+1].first);
-      parallel_for(u+1, end, [&](size_t j) {
+      parlay::parallel_for(u+1, end, [&](size_t j) {
         in_degree_list[j] = i+1;
       });
     }

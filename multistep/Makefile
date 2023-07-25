@@ -1,6 +1,7 @@
 CXX = g++
-# CXXFLAGS = -Wall -fopenmp -O3 -fcilkplus -DCILK -march=native
-CXXFLAGS = -Wall -fopenmp -O3 -fcilkplus -DCILK -march=native
+CXXFLAGS = -std=c++17 -Wall -fopenmp -pthread -O3 -mcx16 -march=native
+
+INCLUDE_PATH = -I../../../parlaylib/include/
 
 all: cc scc
 
