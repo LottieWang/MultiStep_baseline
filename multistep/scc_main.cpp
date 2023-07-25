@@ -464,7 +464,6 @@ int main(int argc, char** argv)
       out_file = argv[++i];
     }
   }
-
   //int* srcs;
   //int* dsts;
   size_t n, m;
@@ -493,6 +492,7 @@ int main(int argc, char** argv)
 #endif
 
   read_binary(argv[1], n, m, out_array, in_array, out_degree_list, in_degree_list, max_deg_vert, avg_degree);
+  std::cout << "Graph: " << argv[1] << " n: " << n << " m: " << m << std::endl;
   //create_csr(n, m, srcs, dsts, 
     //out_array, in_array,
     //out_degree_list, in_degree_list,
