@@ -525,7 +525,7 @@ int main(int argc, char** argv)
     printf("round %d: %f\n", i+1, exec_time);
     total_time += exec_time;
   }
-  printf("average time: %f\n", total_time/rounds);
+  printf("average cost: %f\n", total_time/rounds);
 
 #if TIMING
   exec_time = timer() - exec_time;
